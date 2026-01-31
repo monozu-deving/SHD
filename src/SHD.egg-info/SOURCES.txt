@@ -1,0 +1,9 @@
+README.md
+pyproject.toml
+setup.py
+src/SHD.egg-info/PKG-INFO
+src/SHD.egg-info/SOURCES.txt
+src/SHD.egg-info/dependency_links.txt
+src/SHD.egg-info/requires.txt
+src/SHD.egg-info/top_level.txt
+src/run/dumbell.py
