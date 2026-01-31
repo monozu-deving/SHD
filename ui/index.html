@@ -181,7 +181,12 @@
     <div class="background-blob-2"></div>
 
     <div class="container">
-        <div id="status-badge" class="status-badge">서버 연결 대기 중...</div>
+        <div style="display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 2rem;">
+            <div id="status-badge" class="status-badge" style="margin-bottom: 0;">서버 연결 대기 중...</div>
+            <div id="humi-badge" class="status-badge"
+                style="margin-bottom: 0; display: none; color: var(--secondary); border-color: rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.1);">
+                습도: --%</div>
+        </div>
         <h1>WORKOUT TRACKER</h1>
 
         <div class="main-stats">
@@ -200,6 +205,17 @@
 
         <div id="movement-desc" style="color: var(--text-dim); margin-top: 2rem;">
             움직임이 감지되면 자동으로 시작됩니다.
+        </div>
+
+        <!-- NEW: AI Advice Section -->
+        <div id="advice-section" class="stat-card"
+            style="margin-top: 2rem; padding: 1.5rem; display: none; text-align: left;">
+            <div class="stat-label" style="font-size: 0.8rem; margin-bottom: 0.5rem; color: var(--accent);">AI Trainer
+                Advice</div>
+            <div id="advice-status"
+                style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.75rem; font-style: italic; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 0.5rem;">
+                준비 중...</div>
+            <div id="advice-text" style="font-size: 1rem; line-height: 1.6; color: var(--text-main);"></div>
         </div>
     </div>
 
@@ -220,6 +236,8 @@
 
         const modeColors = {
             'IDLE': { color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.2)' },
+            'WAITING_FOR_EXPERT': { color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.4)' },
+            'CALIBRATING': { color: '#fbbf24', bg: 'rgba(251, 191, 36, 0.1)', border: 'rgba(251, 191, 36, 0.4)' },
             'RECORDING_EXPERT': { color: '#f472b6', bg: 'rgba(244, 114, 182, 0.1)', border: 'rgba(244, 114, 182, 0.4)' },
             'READY': { color: '#34d399', bg: 'rgba(52, 211, 153, 0.1)', border: 'rgba(52, 211, 153, 0.4)' },
             'COUNTING': { color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.2)', border: 'rgba(56, 189, 248, 0.4)' }
@@ -247,7 +265,7 @@
 
                 // Update mode display
                 if (data.mode) {
-                    const modeText = data.mode.replace('_', ' ');
+                    const modeText = data.mode.replace(/_/g, ' ');
                     statusBadge.textContent = modeText;
 
                     const colors = modeColors[data.mode] || modeColors['IDLE'];
@@ -278,6 +296,27 @@
                     if (data.mode) {
                         movementDesc.textContent = modeInstructions[data.mode] || '';
                     }
+                }
+
+                // Update advice
+                if (data.advice || data.advice_status) {
+                    document.getElementById('advice-section').style.display = 'block';
+                    if (data.advice) document.getElementById('advice-text').textContent = data.advice;
+                    if (data.advice_status) {
+                        const statusEl = document.getElementById('advice-status');
+                        statusEl.textContent = data.advice_status;
+                        statusEl.style.opacity = '0.5';
+                        setTimeout(() => statusEl.style.opacity = '1', 50);
+                    }
+                } else {
+                    document.getElementById('advice-section').style.display = 'none';
+                }
+
+                // Update humidity badge
+                if (data.humidity > 0) {
+                    const humiBadge = document.getElementById('humi-badge');
+                    humiBadge.style.display = 'inline-block';
+                    humiBadge.textContent = `습도: ${Math.round(data.humidity)}%`;
                 }
 
                 // Animate count change

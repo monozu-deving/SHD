@@ -7,9 +7,16 @@ from datetime import datetime
 from flask import Flask, Response, send_from_directory
 import matplotlib.pyplot as plt
 import math
+from openai import OpenAI
+from dotenv import load_dotenv
 
 # --- CONFIGURATION ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+load_dotenv(os.path.join(BASE_DIR, ".env"))
+api_key = os.getenv("OPENAI_API_KEY")
+client_ai = OpenAI(api_key=api_key) if api_key else None
+
 HOST = "0.0.0.0"
 PORT = 5000
 REFERENCE_FILE = os.path.join(BASE_DIR, "calibration", "reference_data.json")
@@ -33,11 +40,18 @@ stats = {
     "is_moving": False,
     "mode": "IDLE",
     "current_distribution": [],
-    "expert_distribution": []
+    "expert_distribution": [],
+    "advice": "",
+    "advice_status": "",
+    "humidity": 0
 }
 
+# AI Advice Control
+ai_advice_triggered = False
+ai_advice_completed = False
+
 # Global state
-button_press_count = 0
+# removed button_press_count
 
 @app.route('/')
 def index():
@@ -52,7 +66,8 @@ def generate_events():
     last_sent = {}
     
     while True:
-        for key in ["count", "similarity", "is_moving", "mode"]:
+        # Include advice, advice_status, and humidity in the change tracking
+        for key in ["count", "similarity", "is_moving", "mode", "advice", "advice_status", "humidity"]:
             if stats.get(key) != last_sent.get(key):
                 yield f"data: {json.dumps({'type': 'update', **stats})}\n\n"
                 last_sent = stats.copy()
@@ -123,23 +138,17 @@ def calculate_similarity(ref_list, cur_list):
     sim = max(0, 100 * (1 - (diff_sum / max_diff)))
     return sim
 
-def process_rep(ax_buf, ay_buf, az_buf, baseline, ref_data, stats, session_reps=None):
-    """Processes a single movement rep: trim, count, and buffer for later analysis"""
-    trimmed_ax, trimmed_ay, trimmed_az = extract_movement_segment(
-        ax_buf, ay_buf, az_buf, baseline
-    )
-    
-    if trimmed_ax:
+def process_rep(ax_buf, ay_buf, az_buf, stats, session_reps=None):
+    """Simple activity burst counting: count any significant movement that stopped"""
+    if len(ax_buf) >= MIN_MOVEMENT_SAMPLES:
         stats["count"] += 1
-        print(f">>> Rep #{stats['count']} detected!")
+        print(f">>> Rep #{stats['count']} counted! (Movement stopped)")
         
         if session_reps is not None:
-            session_reps.append((trimmed_ax, trimmed_ay, trimmed_az))
+            # Store the raw burst for later analysis
+            session_reps.append((list(ax_buf), list(ay_buf), list(az_buf)))
         
-        # In real-time, we just show count. Similarity is calculated at the end.
         stats["similarity"] = 0 
-        
-        # Clear distribution after movement ends
         stats["current_distribution"] = []
         return True
     return False
@@ -156,9 +165,14 @@ def finalize_session(session_reps, ref_data, stats):
     
     total_sim = 0
     for i, (ax, ay, az) in enumerate(session_reps):
-        s1 = calculate_similarity(ref_data["ax"], ax)
-        s2 = calculate_similarity(ref_data["ay"], ay)
-        s3 = calculate_similarity(ref_data["az"], az)
+        # Trim each buffered rep before analysis
+        t_ax, t_ay, t_az = extract_movement_segment(ax, ay, az, {"ax": ref_data["ax"][0], "ay": ref_data["ay"][0], "az": ref_data["az"][0]}) # approximation using ref start
+        # Better: use the actual baseline or a dummy if not available
+        if not t_ax: t_ax, t_ay, t_az = ax, ay, az # fallback if trim fails
+        
+        s1 = calculate_similarity(ref_data["ax"], t_ax)
+        s2 = calculate_similarity(ref_data["ay"], t_ay)
+        s3 = calculate_similarity(ref_data["az"], t_az)
         avg_sim = (s1 + s2 + s3) / 3.0
         total_sim += avg_sim
         print(f" Rep #{i+1:2d} | Accuracy: {avg_sim:5.1f}%")
@@ -239,39 +253,74 @@ def save_calibration_graph(ax_list, ay_list, az_list, baseline):
     plt.close()
     print(f">>> Calibration graph saved: {filepath}")
 
+def get_ai_advice(temperature, humidity=0):
+    """Fetch exercise advice from GPT based on current temperature and humidity"""
+    global stats
+    try:
+        if not client_ai:
+            print(">>> Skipping AI advice: OPENAI_API_KEY is not set in .env")
+            stats["advice_status"] = "❌ AI 설정 미흡"
+            stats["advice"] = ".env 파일에 OpenAI API 키를 설정하면 스마트한 운동 조언을 받을 수 있습니다!"
+            return
+
+        stats["advice_status"] = f"🌡️ 온습도 수신 완료: {temperature:.1f}°C / {humidity}%"
+        time.sleep(0.5) 
+        
+        print(f">>> Fetching AI advice for {temperature:.1f}C, {humidity}%...")
+        stats["advice_status"] = "🧠 AI 전문 트레이너의 온습도 분석 중..."
+        stats["advice"] = "AI 조언을 생성하고 있습니다..."
+        
+        response = client_ai.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "system", "content": "너는 전문 헬스 트레이너야. 사용자의 현재 운동 환경 온도(Celsius)와 습도(%)를 보고, 해당 환경에서 운동할 때의 주의사항(부상 방지, 수분 섭취, 불쾌지수 등)과 덤벨 운동 팁을 딱 3문장 정도로 친절하고 전문적으로 말해줘."},
+                {"role": "user", "content": f"현재 온도는 {temperature:.1f}도이고 습도는 {humidity}%야."}
+            ],
+            max_tokens=200
+        )
+        stats["advice"] = response.choices[0].message.content
+        stats["advice_status"] = "✅ 맞춤 온습도 가이드 생성 완료!"
+        print(f">>> AI Advice: {stats['advice']}")
+        
+        # Mark AI advice as completed
+        global ai_advice_completed
+        ai_advice_completed = True
+    except Exception as e:
+        print(f">>> AI Advice Error: {e}")
+        stats["advice_status"] = "⚠️ AI 분석 중 오류 발생"
+        stats["advice"] = "AI 조언을 가져오는 데 실패했습니다. 평소처럼 안전하게 운동하세요!"
+
 def handle_one_connection(conn, addr):
-    global stats, button_press_count
+    global stats
     print(f"\n{'='*50}")
     print(f"Connection from {addr}")
     
-    # Increment button press count on each new connection
-    button_press_count += 1
-    print(f">>> Button press count: {button_press_count}")
+    # Reset per-session stats
+    stats["count"] = 0
+    stats["similarity"] = 0
+    stats["is_moving"] = False
     
-    # Determine mode based on button press count
+    # Determine mode based on expert data existence
     calibration_data = {"ax": [], "ay": [], "az": []}
     baseline = None
     calibration_start_time = None
     is_calibrated = False
     expert_started = False
 
-    if button_press_count == 1:
+    if not os.path.exists(REFERENCE_FILE):
         mode = "RECORDING_EXPERT"
-        stats["mode"] = "CALIBRATING"
-        calibration_start_time = time.time()
-        print(f">>> Mode: {stats['mode']}")
-        print(f">>> Hold STILL for {CALIBRATION_TIME} seconds for calibration...")
-    else:  # button_press_count >= 2
+        stats["mode"] = "WAITING_FOR_EXPERT"
+        # We don't set calibration_start_time here anymore. 
+        # It should start when the first sensor data arrives AND after advice (if any).
+        print(f">>> Mode: EXPERT RECORDING (Pending connection)")
+    else:
         mode = "COUNTING"
         stats["mode"] = "COUNTING"
-        if button_press_count == 2:
-            stats["count"] = 0
-            stats["similarity"] = 0
         if os.path.exists(CALIBRATION_FILE):
             with open(CALIBRATION_FILE, "r") as f:
                 baseline = json.load(f)
             is_calibrated = True
-        print(">>> Mode: COUNTING")
+        print(">>> Mode: COUNTING (Pattern Recognition)")
     
     # Buffers
     expert_ax, expert_ay, expert_az = [], [], []
@@ -313,11 +362,47 @@ def handle_one_connection(conn, addr):
             line = line_bytes.decode(errors="ignore").strip()
             if not line: continue
             
+            # Sync mode from global stats
+            mode = stats.get("mode", mode)
+            
             # Parse sensor data
             try:
+                if line.startswith("ENV:"):
+                    try:
+                        env_data = line.split(":")[1].split(",")
+                        temp_val = float(env_data[0])
+                        humi_val = float(env_data[1])
+                        
+                        print(f">>> Received Env: {temp_val:.1f}C / {humi_val:.1f}%")
+                        stats["humidity"] = humi_val 
+                        
+                        # Trigger AI advice ONLY ONCE
+                        global ai_advice_triggered
+                        if not ai_advice_triggered:
+                            ai_advice_triggered = True
+                            threading.Thread(target=get_ai_advice, args=(temp_val, humi_val), daemon=True).start()
+                        
+                    except Exception as e:
+                        print(f">>> ENV Parse Error: {e}")
+                    continue 
+
+                if line.startswith("TEMP:"):
+                    try:
+                        temp_val = float(line.split(":")[1])
+                        print(f">>> Received Temperature: {temp_val:.1f}C")
+                        threading.Thread(target=get_ai_advice, args=(temp_val,), daemon=True).start()
+                    except:
+                        pass
+                    continue
+
                 parts = line.split(",")
-                if len(parts) < 6: continue  # Need 6 values (accel, gyro)
+                if len(parts) < 6: continue 
                 ax, ay, az, gx, gy, gz = map(int, parts[:6])
+                
+                # Wait for AI advice completion before processing sensor data
+                global ai_advice_completed
+                if ai_advice_triggered and not ai_advice_completed:
+                    continue
                 
                 # Mode-specific handling
                 if mode == "RECORDING_EXPERT":
@@ -397,40 +482,40 @@ def handle_one_connection(conn, addr):
                                     stats["is_moving"] = False
                                     print(f">>> Movement ENDED ({len(current_ax)} samples)")
                                     
-                                    # Process movement
-                                    if len(current_ax) >= MIN_MOVEMENT_SAMPLES and expert_len > 0:
-                                        process_rep(current_ax, current_ay, current_az, baseline, ref_data, stats, session_reps)
+                                    # Simple activity burst counting
+                                    if expert_len > 0:
+                                        process_rep(current_ax, current_ay, current_az, stats, session_reps)
                                     
                                     current_ax, current_ay, current_az = [], [], []
                                     still_start_time = None
+                
+                if is_moving:
+                    current_ax.append(ax)
+                    current_ay.append(ay)
+                    current_az.append(az)
                     
-                    if is_moving:
-                        current_ax.append(ax)
-                        current_ay.append(ay)
-                        current_az.append(az)
-                        
-                        # Stop if we exceed 1.5x expert length (safety) or use STILL_TIME_LIMIT
-                        if expert_len > 0 and len(current_ax) > expert_len * 1.5:
-                            # If it keeps moving too long, we might need to force end or just let STILL_TIME_LIMIT handle
-                            pass
-                        
-                        # Update real-time distribution (sample every 5th point to reduce data)
-                        if len(current_ax) % 5 == 0:
-                            current_mags = [math.sqrt(a**2 + b**2 + c**2) for a, b, c in zip(current_ax, current_ay, current_az)]
-                            stats["current_distribution"] = current_mags[-50:]  # Last 50 samples
-                            
-                            if expert_len > 0:
-                                expert_mags = [math.sqrt(a**2 + b**2 + c**2) for a, b, c in zip(ref_data["ax"], ref_data["ay"], ref_data["az"])]
-                                stats["expert_distribution"] = expert_mags
+                    # Stop if we exceed 1.5x expert length (safety) or use STILL_TIME_LIMIT
+                    if expert_len > 0 and len(current_ax) > expert_len * 1.5:
+                        # If it keeps moving too long, we might need to force end or just let STILL_TIME_LIMIT handle
+                        pass
+                    
+                # Update real-time distribution (sample every 5th point to reduce data)
+                if len(current_ax) % 5 == 0:
+                    current_mags = [math.sqrt(a**2 + b**2 + c**2) for a, b, c in zip(current_ax, current_ay, current_az)]
+                    stats["current_distribution"] = current_mags[-50:]  # Last 50 samples
+                    
+                    if expert_len > 0:
+                        expert_mags = [math.sqrt(a**2 + b**2 + c**2) for a, b, c in zip(ref_data["ax"], ref_data["ay"], ref_data["az"])]
+                        stats["expert_distribution"] = expert_mags
                         
             except Exception as e:
                 continue
     
     # Connection ended
     if mode == "COUNTING":
-        if is_moving and len(current_ax) >= MIN_MOVEMENT_SAMPLES:
+        if is_moving:
             print(">>> Capturing final rep before closure...")
-            process_rep(current_ax, current_ay, current_az, baseline, ref_data, stats, session_reps)
+            process_rep(current_ax, current_ay, current_az, stats, session_reps)
         
         if os.path.exists(REFERENCE_FILE):
             with open(REFERENCE_FILE, "r") as f:
@@ -458,12 +543,10 @@ def handle_one_connection(conn, addr):
         else:
             print(f">>> EXPERT movement too subtle or short")
             stats["mode"] = "IDLE"
-            button_press_count = 0
     
     print(f"{'='*50}\n")
 
 def main():
-    global button_press_count
     threading.Thread(target=run_flask, daemon=True).start()
     print("="*60)
     print("Web UI available at http://localhost")
@@ -479,12 +562,13 @@ def main():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((HOST, PORT))
-        s.listen(1)
+        s.listen(5) # Support multiple connections
         while True:
-            print("\nWaiting for Arduino connection...")
+            print("\nWaiting for device connections...")
             conn, addr = s.accept()
-            with conn:
-                handle_one_connection(conn, addr)
+            print(f">>> New connection accepted from: {addr}")
+            # Start a new thread for each connection
+            threading.Thread(target=handle_one_connection, args=(conn, addr), daemon=True).start()
 
 if __name__ == "__main__":
     main()
