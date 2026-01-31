@@ -1,0 +1,21 @@
+# graph files
+/graph
+
+# log
+*.log
+logs
+npm-debug.log*
+
+#Dependency directories
+node_modules/
+
+# virtual environment
+__pycache__
+.env
+
+# IDE
+.idea
+.vscode
+
+# Output directory
+/out/

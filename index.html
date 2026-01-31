@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dumbbell Workout Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --primary: #38bdf8;
+            --secondary: #818cf8;
+            --accent: #f472b6;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        body {
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 2rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .status-active {
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+            background: rgba(56, 189, 248, 0.2);
+        }
+
+        .main-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            padding: 2.5rem;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-value {
+            font-size: 5rem;
+            font-weight: 800;
+            line-height: 1;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            font-size: 1.125rem;
+            color: var(--text-dim);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        #count-value {
+            color: var(--primary);
+        }
+
+        #sim-value {
+            color: var(--secondary);
+        }
+
+        .progress-container {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+            margin-top: 1.5rem;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .background-blob {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(129, 140, 248, 0) 70%);
+            top: -250px;
+            left: -250px;
+            border-radius: 50%;
+            z-index: 1;
+            filter: blur(50px);
+        }
+
+        .background-blob-2 {
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, rgba(244, 114, 182, 0.1) 0%, rgba(129, 140, 248, 0) 70%);
+            bottom: -300px;
+            right: -300px;
+            border-radius: 50%;
+            z-index: 1;
+            filter: blur(50px);
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.05);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .moving-active {
+            animation: pulse 1s infinite ease-in-out;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="background-blob"></div>
+    <div class="background-blob-2"></div>
+
+    <div class="container">
+        <div id="status-badge" class="status-badge">서버 연결 대기 중...</div>
+        <h1>WORKOUT TRACKER</h1>
+
+        <div class="main-stats">
+            <div class="stat-card">
+                <div id="count-value" class="stat-value">0</div>
+                <div class="stat-label">COUNT</div>
+            </div>
+            <div class="stat-card">
+                <div id="sim-value" class="stat-value">0%</div>
+                <div class="stat-label">SIMILARITY</div>
+                <div class="progress-container">
+                    <div id="sim-progress" class="progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="movement-desc" style="color: var(--text-dim); margin-top: 2rem;">
+            움직임이 감지되면 자동으로 시작됩니다.
+        </div>
+    </div>
+
+    <script>
+        const eventSource = new EventSource("/stream");
+        const statusBadge = document.getElementById('status-badge');
+        const countValue = document.getElementById('count-value');
+        const simValue = document.getElementById('sim-value');
+        const simProgress = document.getElementById('sim-progress');
+        const movementDesc = document.getElementById('movement-desc');
+
+        const modeInstructions = {
+            'IDLE': '버튼을 눌러 Expert 동작 녹화를 시작하세요',
+            'RECORDING_EXPERT': '동작을 수행하고 완료되면 버튼을 다시 누르세요',
+            'READY': 'Expert 동작이 저장되었습니다. 버튼을 눌러 카운팅을 시작하세요',
+            'COUNTING': '운동을 시작하세요! 자동으로 카운팅됩니다'
+        };
+
+        const modeColors = {
+            'IDLE': { color: '#94a3b8', bg: 'rgba(148, 163, 184, 0.1)', border: 'rgba(148, 163, 184, 0.2)' },
+            'RECORDING_EXPERT': { color: '#f472b6', bg: 'rgba(244, 114, 182, 0.1)', border: 'rgba(244, 114, 182, 0.4)' },
+            'READY': { color: '#34d399', bg: 'rgba(52, 211, 153, 0.1)', border: 'rgba(52, 211, 153, 0.4)' },
+            'COUNTING': { color: '#38bdf8', bg: 'rgba(56, 189, 248, 0.2)', border: 'rgba(56, 189, 248, 0.4)' }
+        };
+
+        eventSource.onopen = () => {
+            statusBadge.textContent = "실시간 연결 중";
+            statusBadge.classList.add('status-active');
+        };
+
+        eventSource.onerror = (e) => {
+            statusBadge.textContent = "연결 오류 - 재시도 중";
+            statusBadge.classList.remove('status-active');
+        };
+
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.type === 'update') {
+                // Update count and similarity
+                countValue.textContent = data.count || 0;
+                const sim = data.similarity || 0;
+                simValue.textContent = Math.round(sim) + '%';
+                simProgress.style.width = sim + '%';
+
+                // Update mode display
+                if (data.mode) {
+                    const modeText = data.mode.replace('_', ' ');
+                    statusBadge.textContent = modeText;
+
+                    const colors = modeColors[data.mode] || modeColors['IDLE'];
+                    statusBadge.style.color = colors.color;
+                    statusBadge.style.backgroundColor = colors.bg;
+                    statusBadge.style.borderColor = colors.border;
+
+                    movementDesc.textContent = modeInstructions[data.mode] || '';
+
+                    // Add pulse animation for recording
+                    if (data.mode === 'RECORDING_EXPERT') {
+                        statusBadge.classList.add('moving-active');
+                    } else {
+                        statusBadge.classList.remove('moving-active');
+                    }
+                }
+
+                // Movement indicator
+                if (data.is_moving) {
+                    movementDesc.classList.add('moving-active');
+                    if (data.current_distribution && data.current_distribution.length > 0) {
+                        const currentLen = data.current_distribution.length;
+                        const expertLen = data.expert_distribution ? data.expert_distribution.length : 0;
+                        movementDesc.textContent = `움직임 감지 중... (현재: ${currentLen} | Expert: ${expertLen} 샘플)`;
+                    }
+                } else {
+                    movementDesc.classList.remove('moving-active');
+                    if (data.mode) {
+                        movementDesc.textContent = modeInstructions[data.mode] || '';
+                    }
+                }
+
+                // Animate count change
+                if (data.count > 0) {
+                    countValue.parentElement.style.transform = 'scale(1.1)';
+                    setTimeout(() => {
+                        countValue.parentElement.style.transform = 'translateY(-5px)';
+                    }, 200);
+                }
+            }
+        };
+    </script>
+</body>
+
+</html>
