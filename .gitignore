@@ -16,6 +16,3 @@ __pycache__
 # IDE
 .idea
 .vscode
-
-# Output directory
-/out/
