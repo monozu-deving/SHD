@@ -6,4 +6,14 @@ src/SHD.egg-info/SOURCES.txt
 src/SHD.egg-info/dependency_links.txt
 src/SHD.egg-info/requires.txt
 src/SHD.egg-info/top_level.txt
+src/run/ai_coach.py
+src/run/analysis.py
+src/run/config.py
+src/run/device_handler.py
 src/run/dumbell.py
+src/run/mock_data_sender.py
+src/run/standalone_accel_graph.py
+src/run/standalone_web_graph.py
+src/run/state.py
+src/run/visualizer.py
+src/run/web_server.py

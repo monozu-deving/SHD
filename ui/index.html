@@ -68,8 +68,8 @@
 
         .main-stats {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 1.5rem;
             margin-bottom: 2rem;
         }
 
@@ -173,6 +173,74 @@
         .moving-active {
             animation: pulse 1s infinite ease-in-out;
         }
+
+        .connect-button {
+            margin-top: 2rem;
+            padding: 1rem 2.5rem;
+            font-size: 1.125rem;
+            font-weight: 600;
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-main);
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            box-shadow: 0 4px 20px rgba(56, 189, 248, 0.3);
+        }
+
+        .connect-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 30px rgba(56, 189, 248, 0.5);
+        }
+
+        .connect-button:active {
+            transform: translateY(-1px);
+        }
+
+        .device-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .device-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        .device-ip {
+            font-family: 'Courier New', monospace;
+            color: var(--text-main);
+            font-size: 1rem;
+        }
+
+        .select-device-btn {
+            padding: 0.5rem 1.25rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            font-family: 'Outfit', sans-serif;
+            color: var(--text-main);
+            background: linear-gradient(135deg, var(--accent), var(--secondary));
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .select-device-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(244, 114, 182, 0.4);
+        }
+
+        .select-device-btn:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 
@@ -183,6 +251,9 @@
     <div class="container">
         <div style="display: flex; gap: 0.5rem; justify-content: center; margin-bottom: 2rem;">
             <div id="status-badge" class="status-badge" style="margin-bottom: 0;">서버 연결 대기 중...</div>
+            <div id="set-badge" class="status-badge"
+                style="margin-bottom: 0; background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239, 68, 68, 0.2);">
+                SET STOPPED</div>
             <div id="humi-badge" class="status-badge"
                 style="margin-bottom: 0; display: none; color: var(--secondary); border-color: rgba(129, 140, 248, 0.2); background: rgba(129, 140, 248, 0.1);">
                 습도: --%</div>
@@ -190,6 +261,10 @@
         <h1>WORKOUT TRACKER</h1>
 
         <div class="main-stats">
+            <div class="stat-card">
+                <div id="set-value" class="stat-value" style="color: var(--accent);">0</div>
+                <div class="stat-label">SETS</div>
+            </div>
             <div class="stat-card">
                 <div id="count-value" class="stat-value">0</div>
                 <div class="stat-label">COUNT</div>
@@ -207,6 +282,11 @@
             움직임이 감지되면 자동으로 시작됩니다.
         </div>
 
+        <!-- Dumbbell Connection Button -->
+        <button id="connect-btn" class="connect-button" style="display: none;" onclick="connectDumbbell()">
+            아령 연결하기
+        </button>
+
         <!-- NEW: AI Advice Section -->
         <div id="advice-section" class="stat-card"
             style="margin-top: 2rem; padding: 1.5rem; display: none; text-align: left;">
@@ -217,6 +297,12 @@
                 준비 중...</div>
             <div id="advice-text" style="font-size: 1rem; line-height: 1.6; color: var(--text-main);"></div>
         </div>
+
+        <!-- NEW: Workout Report History Section -->
+        <div id="report-history"
+            style="margin-top: 2rem; display: flex; flex-direction: column; gap: 1.5rem; width: 100%;">
+            <!-- Latest reports will be prepended here -->
+        </div>
     </div>
 
     <script>
@@ -226,11 +312,20 @@
         const simValue = document.getElementById('sim-value');
         const simProgress = document.getElementById('sim-progress');
         const movementDesc = document.getElementById('movement-desc');
+        const reportHistory = document.getElementById('report-history');
+
+        let initialSetWarningDone = false;
+        let expertSetWarningDone = false;
+        let lastPhase = '';
+        let lastMode = '';
+        let lastGraph = '';
 
         const modeInstructions = {
-            'IDLE': '버튼을 눌러 Expert 동작 녹화를 시작하세요',
-            'RECORDING_EXPERT': '동작을 수행하고 완료되면 버튼을 다시 누르세요',
-            'READY': 'Expert 동작이 저장되었습니다. 버튼을 눌러 카운팅을 시작하세요',
+            'IDLE': '아령을 연결해 주세요',
+            'CALIBRATING': '5초간 아령을 움직이지 마세요 (보정 중...)',
+            'WAITING_FOR_EXPERT': '버튼을 누르고 전문가 동작을 1회 수행하세요.',
+            'RECORDING_EXPERT': '전문가 동작을 기록 중입니다... (끝날 때까지 유지)',
+            'READY': '설정 완료! 버튼을 눌러 운동을 시작하세요',
             'COUNTING': '운동을 시작하세요! 자동으로 카운팅됩니다'
         };
 
@@ -257,11 +352,24 @@
             const data = JSON.parse(event.data);
 
             if (data.type === 'update') {
-                // Update count and similarity
+                // Update stats
+                if (typeof data.set_count !== 'undefined') {
+                    document.getElementById('set-value').textContent = data.set_count;
+                }
                 countValue.textContent = data.count || 0;
                 const sim = data.similarity || 0;
                 simValue.textContent = Math.round(sim) + '%';
                 simProgress.style.width = sim + '%';
+
+                if (data.connection_phase) {
+                    if (lastPhase !== data.connection_phase) {
+                        lastPhase = data.connection_phase;
+                        // 아령이 새로 연결되면 경고 플래그 초기화
+                        if (data.connection_phase === 'DUMBBELL_CONNECTED') {
+                            initialSetWarningDone = false;
+                        }
+                    }
+                }
 
                 // Update mode display
                 if (data.mode) {
@@ -274,6 +382,14 @@
                     statusBadge.style.borderColor = colors.border;
 
                     movementDesc.textContent = modeInstructions[data.mode] || '';
+
+                    // 모드 변경 시 전문가 경고 플래그 초기화
+                    if (lastMode !== data.mode) {
+                        lastMode = data.mode;
+                        if (data.mode === 'WAITING_FOR_EXPERT') {
+                            expertSetWarningDone = false;
+                        }
+                    }
 
                     // Add pulse animation for recording
                     if (data.mode === 'RECORDING_EXPERT') {
@@ -326,8 +442,111 @@
                         countValue.parentElement.style.transform = 'translateY(-5px)';
                     }, 200);
                 }
+
+                // Show/hide connect button based on connection phase
+                const connectBtn = document.getElementById('connect-btn');
+
+                if (data.connection_phase === 'ENV_DONE') {
+                    connectBtn.style.display = 'inline-block';
+                } else if (data.connection_phase === 'DUMBBELL_CONNECTED') {
+                    connectBtn.style.display = 'none';
+                }
+
+                // Update set status badge
+                const setBadge = document.getElementById('set-badge');
+                if (typeof data.is_set_active !== 'undefined') {
+                    if (data.is_set_active) {
+                        setBadge.textContent = 'SET IN PROGRESS';
+                        setBadge.style.background = 'rgba(52, 211, 153, 0.2)';
+                        setBadge.style.color = '#34d399';
+                        setBadge.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+                        setBadge.classList.add('moving-active'); // Add pulse effect
+
+                        // [요청 반영] 연결된 직후에 세트가 진행 중이라면 안내 메시지 변경 (일회성)
+                        if (data.connection_phase === 'DUMBBELL_CONNECTED') {
+                            if (!initialSetWarningDone && data.is_set_active) {
+                                movementDesc.textContent = '세트를 멈췄다가 다시 시작해 주세요 (정확한 측정을 위해)!';
+                                movementDesc.style.color = '#fbbf24'; // Warning color (amber)
+                                initialSetWarningDone = true;
+                            }
+                        }
+
+                        // [요청 반영] 전문가 녹화 대기 중인데 세트가 켜져 있는 고 있는 경우 (일회성)
+                        if (data.mode === 'WAITING_FOR_EXPERT') {
+                            if (!expertSetWarningDone && data.is_set_active) {
+                                movementDesc.textContent = '세트 버튼을 끄고 전문가 동작을 수행해 주세요!';
+                                movementDesc.style.color = '#fbbf24';
+                                expertSetWarningDone = true;
+                            }
+                        }
+                    } else {
+                        setBadge.textContent = 'SET STOPPED';
+                        setBadge.style.background = 'rgba(239, 68, 68, 0.1)';
+                        setBadge.style.color = '#ef4444';
+                        setBadge.style.borderColor = 'rgba(239, 68, 68, 0.2)';
+                        setBadge.classList.remove('moving-active');
+                        movementDesc.style.color = ''; // Reset color
+                    }
+                }
+                // Update graph report history (Latest First)
+                if (data.latest_graph && data.latest_graph !== lastGraph) {
+                    lastGraph = data.latest_graph;
+
+                    // Create new report card
+                    const card = document.createElement('div');
+                    card.className = 'stat-card';
+                    card.style.padding = '1.5rem';
+                    card.style.animation = 'pulse 0.5s ease-out';
+
+                    const label = document.createElement('div');
+                    label.className = 'stat-label';
+                    label.style.marginBottom = '1rem';
+                    label.style.color = 'var(--primary)';
+
+                    // 전문가 동작인지 일반 세트인지 구분
+                    if (data.latest_graph.includes('expert')) {
+                        label.textContent = 'Expert Sample Reference';
+                        label.style.color = 'var(--accent)';
+                    } else {
+                        // 파일명에서 세트 번호 추출 시도 (movement_N_TS.png)
+                        const parts = data.latest_graph.split('_');
+                        const setNum = parts.length > 1 ? parts[1] : '?';
+                        label.textContent = `Workout Report: Set #${setNum}`;
+                    }
+
+                    const img = document.createElement('img');
+                    img.src = `/graph/${data.latest_graph}?t=${new Date().getTime()}`;
+                    img.alt = "Workout Graph";
+                    img.style.width = '100%';
+                    img.style.borderRadius = '12px';
+                    img.style.border = '1px solid rgba(255,255,255,0.1)';
+
+                    card.appendChild(label);
+                    card.appendChild(img);
+
+                    // Prepend to show latest first
+                    reportHistory.prepend(card);
+                }
             }
         };
+
+        function connectDumbbell() {
+            fetch('/connect_dumbbell', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Dumbbell connection allowed:', data);
+                    document.getElementById('connect-btn').textContent = '아령 연결 대기 중...';
+                    document.getElementById('connect-btn').disabled = true;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                });
+        }
     </script>
 </body>
 

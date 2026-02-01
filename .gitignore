@@ -1,5 +1,4 @@
 # graph files
-/graph
 
 # log
 *.log
@@ -12,6 +11,7 @@ node_modules/
 # virtual environment
 __pycache__
 .env
+/SHD.egg-info
 
 # IDE
 .idea

@@ -15,7 +15,7 @@ const uint32_t SEND_INTERVAL_MS = 20; // 50Hz
 
 // ===================== 버튼 설정 =====================
 #define BUTTON_PIN 3
-bool sendingEnabled = false;
+// bool sendingEnabled = false; // 제거됨
 
 bool lastButtonReading = HIGH;
 bool buttonState = HIGH;
@@ -79,7 +79,9 @@ void stopTCP() {
   }
 }
 
-// 버튼 처리(눌렀을 때 토글)
+// 버튼 처리(눌렀을 때 세트 상태 토글)
+bool setInProgress = false;
+
 void handleButtonToggle() {
   bool reading = digitalRead(BUTTON_PIN);
 
@@ -93,19 +95,10 @@ void handleButtonToggle() {
 
       // INPUT_PULLUP: 눌렀을 때 LOW
       if (buttonState == LOW) {
-        sendingEnabled = !sendingEnabled;
-        Serial.print("Sending toggled -> ");
-        Serial.println(sendingEnabled ? "ON" : "OFF");
-
-        // ON이면 TCP 연결 시도, OFF면 TCP 끊기
-        if (sendingEnabled) {
-          if (!client.connected()) {
-            connectTCPOnce(); // 실패해도 loop에서 다시 시도하게 둘 수 있음
-          }
-          lastSendMs = millis();
-        } else {
-          stopTCP();
-        }
+        // 버튼 클릭 시 세트 상태 토글
+        setInProgress = !setInProgress;
+        Serial.print("Set Toggled (Always Streaming) -> ");
+        Serial.println(setInProgress ? "IN PROGRESS" : "STOPPED");
       }
     }
   }
@@ -161,28 +154,19 @@ void setup() {
 void loop() {
   if (!dmpReady) return;
 
-  // 버튼 토글 처리
+  // 버튼 토글 처리 (세트 상태만 관리)
   handleButtonToggle();
 
-  // 전송 OFF면 센서 읽기만 하고(혹은 아예 return) 네트워크 전송은 안 함
-  // DMP FIFO가 쌓이는 게 싫으면 여기서 FIFO만 주기적으로 비워주면 됨.
-  if (!sendingEnabled) {
-    // FIFO overflow 방지용으로 가끔 비움(선택)
-    fifoCount = mpu.getFIFOCount();
-    if (fifoCount == 1024) mpu.resetFIFO();
-    delay(5);
-    return;
-  }
-
-  // 전송 ON인데 TCP가 끊겼으면 재연결 시도(너무 자주 말고 1초에 한 번 정도)
+  // 상시 연결 유지 시도 (자동 연결)
   static uint32_t lastReconnectMs = 0;
-  if (!client.connected() && millis() - lastReconnectMs > 1000) {
+  if (!client.connected() && millis() - lastReconnectMs > 2000) {
     lastReconnectMs = millis();
+    Serial.println("Attempting automatic TCP connection...");
     connectTCPOnce();
   }
-  if (!client.connected()) return; // 아직 연결 안됐으면 전송 못함
+  if (!client.connected()) return;
 
-  // 전송 주기 제한
+  // 전송 주기 제한 (상시 전송)
   uint32_t now = millis();
   if (now - lastSendMs >= SEND_INTERVAL_MS) {
     lastSendMs = now;
@@ -219,7 +203,8 @@ void loop() {
       client.print(aa.z); client.print(",");
       client.print(gg.x); client.print(",");
       client.print(gg.y); client.print(",");
-      client.println(gg.z);
+      client.print(gg.z); client.print(",");
+      client.println(setInProgress ? 1 : 0); // 7번째 열: 세트 진행 상태
     }
   }
 }
