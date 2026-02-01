@@ -4,10 +4,10 @@
 #include <WiFiS3.h>
 
 // ===================== WIFI 설정 =====================
-const char* WIFI_SSID = "Alom";
-const char* WIFI_PASS = "dkfha622";
+const char* WIFI_SSID = "kdk";
+const char* WIFI_PASS = "12345678";
 
-IPAddress SERVER_IP(192, 168, 1, 111);
+IPAddress SERVER_IP(10, 15, 95, 203);
 const uint16_t SERVER_PORT = 5000;
 
 const uint32_t SEND_INTERVAL_MS = 20; // 50Hz

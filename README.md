@@ -87,6 +87,11 @@ python dumbell.py
 4. **운동 시작**: 다시 버튼을 눌러 **COUNTING** 모드로 진입합니다.
 5. **실시간 트레이닝**: 운동을 수행하면 실시간으로 횟수가 올라가고, 자세가 얼마나 정확했는지 점수(%)로 알려줍니다.
 
+`standalone_accel_graph.py`
+1. `python standalone_accel_graph.py`실행
+2. 그래프 안 뜨면 버튼 눌러서 모드 변경 후 진행
+
+
 ---
 
 ## 📂 프로젝트 구조

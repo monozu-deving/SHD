@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Acceleration Graph</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --primary: #38bdf8;
+            --secondary: #818cf8;
+            --accent: #f472b6;
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+        }
+
+        body {
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 1000px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 1rem;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .chart-container {
+            background: var(--card-bg);
+            backdrop-filter: blur(12px);
+            padding: 1rem;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+            position: relative;
+            height: 500px;
+            width: 100%;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            background: rgba(56, 189, 248, 0.1);
+            color: var(--primary);
+            font-weight: 600;
+            font-size: 0.875rem;
+            margin-bottom: 2rem;
+            border: 1px solid rgba(56, 189, 248, 0.2);
+        }
+
+        .background-blob {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(56, 189, 248, 0.15) 0%, rgba(129, 140, 248, 0) 70%);
+            top: -250px;
+            left: -250px;
+            border-radius: 50%;
+            z-index: 1;
+            filter: blur(50px);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="background-blob"></div>
+
+    <div class="container">
+        <div id="status-badge" class="status-badge">Connecting to Device...</div>
+        <h1>Real-time Acceleration</h1>
+
+        <div class="chart-container">
+            <canvas id="accelChart"></canvas>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('accelChart').getContext('2d');
+        const maxDataPoints = 100; // Number of points to show
+
+        // Initialize Chart
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(maxDataPoints).fill(''),
+                datasets: [
+                    {
+                        label: 'AX',
+                        data: Array(maxDataPoints).fill(0),
+                        borderColor: '#ef4444', // Red
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'AY',
+                        data: Array(maxDataPoints).fill(0),
+                        borderColor: '#22c55e', // Green
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointRadius: 0
+                    },
+                    {
+                        label: 'AZ',
+                        data: Array(maxDataPoints).fill(0),
+                        borderColor: '#3b82f6', // Blue
+                        borderWidth: 2,
+                        tension: 0.3,
+                        pointRadius: 0
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false, // Disable animation for performance
+                interaction: {
+                    intersect: false,
+                    mode: 'index',
+                },
+                scales: {
+                    x: {
+                        display: false
+                    },
+                    y: {
+                        suggestedMin: -20000,
+                        suggestedMax: 20000,
+                        grid: {
+                            color: 'rgba(255, 255, 255, 0.1)'
+                        },
+                        ticks: {
+                            color: '#94a3b8'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#f8fafc'
+                        }
+                    }
+                }
+            }
+        });
+
+        // Connect to SSE Stream
+        const eventSource = new EventSource("/stream");
+        const statusBadge = document.getElementById('status-badge');
+        let lastUpdate = Date.now();
+
+        eventSource.onopen = () => {
+            statusBadge.textContent = "Waiting for Data Stream...";
+            statusBadge.style.color = "#38bdf8";
+        };
+
+        eventSource.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+
+            // Check if we are receiving data (basic check if non-zero or just update)
+            statusBadge.textContent = "Receiving Data";
+            statusBadge.style.color = "#4ade80"; // Bright Green
+            statusBadge.style.borderColor = "#4ade80";
+
+            // Push new data
+            removeFirst(chart);
+            addData(chart, data.ax, data.ay, data.az);
+
+            lastUpdate = Date.now();
+        };
+
+        eventSource.onerror = (e) => {
+            statusBadge.textContent = "Connection Lost";
+            statusBadge.style.color = "#f472b6"; // Pink/Red
+        };
+
+        function addData(chart, ax, ay, az) {
+            chart.data.datasets[0].data.push(ax);
+            chart.data.datasets[1].data.push(ay);
+            chart.data.datasets[2].data.push(az);
+            chart.update('none'); // Update without animation
+        }
+
+        function removeFirst(chart) {
+            chart.data.datasets[0].data.shift();
+            chart.data.datasets[1].data.shift();
+            chart.data.datasets[2].data.shift();
+        }
+
+        // Watchdog specifically for UI feedback
+        setInterval(() => {
+            if (Date.now() - lastUpdate > 2000) {
+                statusBadge.textContent = "No Data Received";
+                statusBadge.style.color = "#fbbf24"; // Yellow
+            }
+        }, 1000);
+
+    </script>
+</body>
+
+</html>

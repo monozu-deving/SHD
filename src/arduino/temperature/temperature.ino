@@ -3,8 +3,8 @@
 #include <DHT11.h>
 
 // ===================== WIFI 및 서버 설정 =====================
-const char* WIFI_SSID = "Alom";
-const char* WIFI_PASS = "dkfha622";
+const char* WIFI_SSID = "kdk";
+const char* WIFI_PASS = "12345678";
 
 IPAddress SERVER_IP(192, 168, 1, 111);
 const uint16_t SERVER_PORT = 5000;
