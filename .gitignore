@@ -11,7 +11,7 @@ node_modules/
 # virtual environment
 __pycache__
 .env
-SHD.egg-info/
+src/SHD.egg-info/
 
 # IDE
 .idea

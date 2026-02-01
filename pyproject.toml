@@ -5,6 +5,8 @@ description = "Smart Handheld Dumbbell project"
 dependencies = [
     "Flask",
     "matplotlib",
+    "openai",
+    "python-dotenv",
 ]
 
 [build-system]
