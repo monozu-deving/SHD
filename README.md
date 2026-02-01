@@ -1,4 +1,4 @@
-# SHD (Smart Home Dumbell) 🏋️‍♂️
+# SHD (Smart Home Dumbbell) 🏋️‍♂️
 
 SHD는 **IoT 센서와 AI 기술**을 결합하여 집에서도 전문가 수준의 덤벨 운동을 할 수 있도록 도와주는 스마트 홈 트레이닝 솔루션입니다.
 실시간 운동 분석뿐만 아니라, **운동 환경(온도, 습도)**까지 고려하여 **GPT-4o 기반의 맞춤형 운동 조언**을 제공합니다.
@@ -36,7 +36,7 @@ SHD는 **IoT 센서와 AI 기술**을 결합하여 집에서도 전문가 수준
 1. **환경 센서 (Env Device)**
    - 전원 ON 시 자동 WiFi 연결 및 계속해서 `ENV:온도,습도` 데이터 전송
    - 버튼 조작 없이 **상시 작동**
-2. **덤벨 센서 (Dumbell Device)**
+2. **덤벨 센서 (dumbbell Device)**
    - 덤벨에 부착되어 움직임 데이터 (`ax, ay, az...`) 전송
    - **버튼 조작**을 통해 모드 전환 (`보정` → `기록` → `카운팅`)
 
@@ -64,7 +64,7 @@ OPENAI_API_KEY=sk-your-api-key-here
 ### 3. 서버 실행
 ```bash
 cd src/run
-python dumbell.py
+python dumbbell.py
 ```
 서버가 시작되면 터미널에 `Waiting for device connections...` 메시지가 표시됩니다.
 
@@ -80,7 +80,7 @@ python dumbell.py
 
 ## 📝 사용 방법 (User Workflow)
 
-1. **준비 단계**: `dumbell.py` 실행 및 웹 대시보드 접속
+1. **준비 단계**: `dumbbell.py` 실행 및 웹 대시보드 접속
 2. **환경 분석**: 온습도 센서가 켜지면 자동으로 **"오늘의 운동 팁"**이 화면에 뜹니다.
    - *"현재 습도가 70%로 높으니 평소보다 휴식 시간을 10초 더 가지세요!"*
 3. **전문가 모드 (옵션)**: 처음이라면 덤벨 버튼을 눌러 **EXPERT RECORDING**을 시작하고, 정석 자세를 1회 수행하여 저장합니다.
@@ -99,10 +99,10 @@ python dumbell.py
 SHD/
 ├── src/
 │   ├── arduino/          # 아두이노 펌웨어 소스
-│   │   ├── dumbell/      # 덤벨 센서 (MPU6050)
+│   │   ├── dumbbell/      # 덤벨 센서 (MPU6050)
 │   │   └── temperature/  # 환경 센서 (DHT11)
 │   └── run/              # 파이썬 메인 서버
-│       └── dumbell.py    # Flask 서버 + AI 로직 + 데이터 처리
+│       └── dumbbell.py    # Flask 서버 + AI 로직 + 데이터 처리
 ├── ui/                   # 웹 대시보드 리소스 (HTML/CSS/JS)
 ├── calibration/          # 캘리브레이션 및 기준 데이터 저장소
 └── graph/                # 생성된 운동 분석 그래프 저장소
