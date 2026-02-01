@@ -18,10 +18,16 @@ class AppState:
                         "expert_distribution": [],
                         "advice": "",
                         "advice_status": "",
-                        "humidity": 0
+                        "humidity": 0,
+                        "connection_phase": "WAITING_ENV",
+                        "allow_dumbbell": False,
+                        "is_set_active": False,
+                        "set_count": 0,
+                        "latest_graph": ""
                     }
                     cls._instance.ai_advice_triggered = False
                     cls._instance.ai_advice_completed = False
+                    cls._instance.env_sensor_connected = False
         return cls._instance
 
     @classmethod
