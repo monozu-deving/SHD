@@ -7,7 +7,7 @@
 const char* WIFI_SSID = "kdk";
 const char* WIFI_PASS = "12345678";
 
-IPAddress SERVER_IP(10, 15, 95, 203);
+IPAddress SERVER_IP(10, 15, 95, 100);
 const uint16_t SERVER_PORT = 5000;
 
 const uint32_t SEND_INTERVAL_MS = 20; // 50Hz
